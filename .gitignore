@@ -1,6 +1,10 @@
 node_modules
 .next
-.env
 *.tsbuildinfo
 next-env.d.ts
-.env*
+
+# Segredos e artefatos locais — nunca versionar
+.env
+.env.local
+.env.*.local
+.vercel
