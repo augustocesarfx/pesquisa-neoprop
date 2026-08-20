@@ -93,3 +93,21 @@ usar `npx prisma studio`.
 
 `Dockerfile` pronto (saída standalone do Next). Rode `npx prisma migrate deploy`
 no bootstrap ou antes de subir o container.
+
+## Deploy na Vercel
+
+O build já roda `prisma generate && prisma migrate deploy` — a tabela é criada
+sozinha no primeiro deploy, desde que `DATABASE_URL` esteja configurada.
+
+1. Provisione um Postgres (Neon, Supabase ou similar) e copie a **connection
+   string com pool** (serverless abre muitas conexões curtas; a URL direta
+   esgota o limite do banco).
+2. Em **Settings → Environment Variables** do projeto, configure no mínimo:
+   `DATABASE_URL` e `EXPORT_TOKEN`.
+3. Faça o redeploy.
+
+Para rodar as migrações fora do build:
+
+```bash
+DATABASE_URL="..." npx prisma migrate deploy
+```
