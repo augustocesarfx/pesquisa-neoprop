@@ -4,7 +4,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Aplicação usa a conexão com pool (serverless abre muitas conexões curtas)
+  url       = env("DATABASE_URL")
+  // Migrações usam a conexão direta — o pooler não executa DDL de forma confiável
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // Resposta da pesquisa de experiência/NPS da Neoprop.
