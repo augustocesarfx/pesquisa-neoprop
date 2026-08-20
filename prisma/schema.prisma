@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Resposta da pesquisa de experiência/NPS da Neoprop.
+// Arrays em TEXT[] (Postgres). "flagged" marca suspeita de spam sem descartar.
+model SurveyResponse {
+  id                    String   @id // gerado no cliente (idempotência do envio)
+  createdAt             DateTime @default(now())
+  customerRef           String? // identificação vinda do CRM/URL (cid/email), quando disponível
+  respondentName        String?
+  respondentEmail       String?
+  respondentWhatsapp    String? // somente dígitos (DDI+DDD+número)
+  npsScore              Int
+  npsBand               String // detractor | neutral | promoter (classificação interna)
+  npsReason             String?
+  journeyStage          String
+  journeyStageSource    String   @default("form") // form | url
+  firstContact          String
+  firstContactDetail    String?
+  otherFirms            String // yes | no
+  otherFirmsNames       String?
+  tradeMotivation       String
+  tradeMotivationOther  String?
+  deskMotivations       String[]
+  deskMotivationsOther  String?
+  expectation           String
+  valuePoints           String[]
+  valuePointsOther      String?
+  improvePoints         String[]
+  improvePointsOther    String?
+  improveDetailTheme    String?
+  improveDetail         String?
+  supportOutcome        String?
+  supportEase           Int?
+  failureFactor         String?
+  failureFactorOther    String?
+  realAccountTransition String?
+  withdrawalExperience  String?
+  withdrawalDetail      String?
+  trustScore            Int
+  communication         String
+  desiredContents       String[]
+  repurchaseIntent      String
+  repurchaseBarrier     String[]
+  repurchaseBarrierOther String?
+  priorityFix           String?
+  priorityFixOther      String?
+  preserve              String?
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmContent            String?
+  utmTerm               String?
+  referrer              String?
+  clientDurationMs      Int?
+  flagged               String? // honeypot | too_fast
+
+  @@index([createdAt])
+  @@index([npsBand])
+}

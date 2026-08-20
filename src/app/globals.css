@@ -1,0 +1,510 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Pesquisa de Experiência Neoprop — rota /pesquisa
+   Escopo: .np-page (não vaza para o restante do site)
+
+   Identidade Neoprop: grafite profundo, verde institucional
+   (#0fa750) com texto escuro sobre o verde, Instrument Sans +
+   IBM Plex Mono, raios contidos, zero estética de venda.
+   Os tokens usam os nomes --ap-* para reaproveitar Button/
+   Reveal/Container compartilhados do projeto.
+   ============================================================ */
+
+.np-page {
+  /* Superfícies (ink da Neoprop) */
+  --ap-bg: #0b100e;
+  --ap-bg-2: #0f1513;
+  --ap-surface: #0f1513;
+  --ap-surface-2: #131b18;
+  --ap-tile-dark: #070a09;
+
+  /* Texto */
+  --ap-text: #e9f0ec;
+  --ap-text-dim: #9dada5;
+
+  /* Ação única — verde institucional Neoprop (texto escuro sobre o verde) */
+  --ap-green: #0fa750;
+  --ap-green-hover: #16c463;
+  --ap-green-ink: #070a09;
+  --ap-red: #e8887a;
+  --ap-gold: #f0c06a;
+
+  --ap-border: #1e2a26;
+  --ap-border-strong: #2b3a34;
+
+  --ap-shadow-cta: none;
+  --ap-shadow-panel: rgba(0, 0, 0, 0.45) 0 12px 40px 0;
+
+  --ap-accent: var(--ap-green);
+  --ap-accent-deep: #16c463;
+  --ap-danger: var(--ap-red);
+
+  color-scheme: dark;
+  background: var(--ap-bg);
+  color: var(--ap-text);
+  font-family: var(--font-np-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.008em;
+}
+
+.np-page ::selection {
+  background: rgba(15, 167, 80, 0.28);
+}
+
+.np-page :focus-visible {
+  outline: 2px solid var(--ap-green-hover);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Raios contidos: documento técnico, não app de cartão.
+   Glow discreto no hover — a única sombra colorida do sistema. */
+.np-page .ap-btn {
+  border-radius: 10px;
+}
+
+.np-page .ap-btn:hover:not(:disabled) {
+  box-shadow: 0 8px 28px rgba(15, 167, 80, 0.28);
+}
+
+/* Faixa de abertura (tile mais profundo que o canvas) */
+.np-dark {
+  background: var(--ap-tile-dark);
+  border-bottom: 1px solid var(--ap-border);
+}
+
+/* Vozes tipográficas */
+.np-display {
+  font-family: var(--font-np-display), var(--font-np-sans), ui-sans-serif,
+    system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.np-eyebrow {
+  font-family: var(--font-np-mono), ui-monospace, monospace;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.np-mono {
+  font-family: var(--font-np-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Atmosfera: grid técnico + brilho ambiente do hero ------------------ */
+
+.np-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(233, 240, 236, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(233, 240, 236, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 85% 80% at 50% 30%,
+    black 30%,
+    transparent 90%
+  );
+  mask-image: radial-gradient(
+    ellipse 85% 80% at 50% 30%,
+    black 30%,
+    transparent 90%
+  );
+}
+
+.np-hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 60% 45% at 50% 38%,
+    rgba(15, 167, 80, 0.09),
+    transparent 70%
+  );
+}
+
+/* --- Assinatura: linha de pulso (curva de capital que se desenha) ------- */
+
+.np-pulse-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: np-pulse-draw 2.4s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+}
+
+@keyframes np-pulse-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.np-pulse-dot {
+  opacity: 0;
+  animation: np-pulse-dot-in 0.5s ease-out 2.6s forwards;
+}
+
+@keyframes np-pulse-dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* --- Sequência de entrada do hero (carregamento orquestrado) ------------ */
+
+.np-rise {
+  opacity: 0;
+  transform: translateY(18px);
+  animation: np-rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes np-rise-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- Reveal on scroll (mesma mecânica do componente compartilhado) ---- */
+
+.ap-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.ap-reveal.ap-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* --- Spinner do Button compartilhado --------------------------------- */
+
+@keyframes ap-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ap-spin {
+  animation: ap-spin 0.8s linear infinite;
+}
+
+@keyframes ap-cta-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ap-cta-enter {
+  animation: ap-cta-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ap-cta-glow {
+  box-shadow: none;
+}
+
+/* --- Transição entre etapas do formulário ----------------------------- */
+
+@keyframes np-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.np-step-enter {
+  animation: np-step-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- Barra de progresso discreta --------------------------------------- */
+
+.np-progress-track {
+  height: 3px;
+  background: var(--ap-border-strong);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.np-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ap-green) 60%, var(--ap-green-hover));
+  border-radius: 9999px;
+  box-shadow: 0 0 12px rgba(22, 196, 99, 0.45);
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- Cartões de opção (radio/checkbox) --------------------------------- */
+
+.np-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 16px;
+  border: 1px solid var(--ap-border-strong);
+  border-radius: 10px;
+  background: var(--ap-surface);
+  color: var(--ap-text);
+  text-align: left;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.np-option:hover {
+  border-color: var(--ap-green);
+}
+
+.np-option:has(input:focus-visible) {
+  outline: 2px solid var(--ap-green-hover);
+  outline-offset: 2px;
+}
+
+.np-option[data-checked="true"] {
+  border-color: var(--ap-green);
+  background: rgba(15, 167, 80, 0.08);
+  box-shadow: inset 0 0 0 1px var(--ap-green);
+}
+
+.np-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Indicador (círculo para escolha única, quadrado para múltipla) */
+.np-option .np-dot {
+  flex: none;
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--ap-border-strong);
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ap-green-ink); /* cor do check sobre o verde */
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.np-option .np-dot[data-shape="square"] {
+  border-radius: 5px;
+}
+
+.np-option[data-checked="true"] .np-dot {
+  border-color: var(--ap-green);
+  background: var(--ap-green);
+  animation: np-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes np-pop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.np-option .np-dot svg {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.np-option[data-checked="true"] .np-dot svg {
+  opacity: 1;
+}
+
+/* --- Escalas numéricas (0–10 e 1–5) ------------------------------------ */
+
+.np-scale {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.np-scale[data-size="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 480px) {
+  .np-scale {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .np-scale[data-size="5"] {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.np-scale-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid var(--ap-border-strong);
+  border-radius: 8px;
+  background: var(--ap-surface);
+  font-family: var(--font-np-mono), ui-monospace, monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.np-scale-cell:hover {
+  border-color: var(--ap-green);
+  transform: translateY(-1px);
+}
+
+.np-scale-cell:has(input:focus-visible) {
+  outline: 2px solid var(--ap-green-hover);
+  outline-offset: 2px;
+}
+
+.np-scale-cell[data-checked="true"] {
+  border-color: var(--ap-green);
+  background: var(--ap-green);
+  color: var(--ap-green-ink);
+  font-weight: 500;
+}
+
+.np-scale-cell input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Campos de texto ----------------------------------------------------- */
+
+.np-input,
+.np-textarea {
+  width: 100%;
+  border: 1px solid var(--ap-border-strong);
+  border-radius: 8px;
+  background: var(--ap-surface);
+  color: var(--ap-text);
+  padding: 13px 15px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  transition: border-color 0.18s ease;
+}
+
+.np-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.np-input::placeholder,
+.np-textarea::placeholder {
+  color: var(--ap-text-dim);
+  opacity: 0.7;
+}
+
+.np-input:focus,
+.np-textarea:focus {
+  outline: none;
+  border-color: var(--ap-green);
+  box-shadow: inset 0 0 0 1px var(--ap-green);
+}
+
+/* --- Selo final: círculo e check se desenham em sequência ---------------- */
+
+.np-seal-circle {
+  stroke-dasharray: 289;
+  stroke-dashoffset: 289;
+  animation: np-seal-draw 0.7s ease-out forwards;
+}
+
+.np-seal-check {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: np-seal-draw 0.45s ease-out 0.55s forwards;
+}
+
+@keyframes np-seal-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .np-step-enter,
+  .ap-cta-enter,
+  .np-rise,
+  .np-pulse-line,
+  .np-pulse-dot,
+  .np-option[data-checked="true"] .np-dot {
+    animation: none;
+  }
+  .np-rise {
+    opacity: 1;
+    transform: none;
+  }
+  .np-pulse-line {
+    stroke-dashoffset: 0;
+  }
+  .np-pulse-dot {
+    opacity: 1;
+  }
+  .np-seal-circle,
+  .np-seal-check {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  .np-progress-fill {
+    transition: none;
+  }
+  .np-scale-cell,
+  .np-option {
+    transition: none;
+  }
+  .np-scale-cell:hover {
+    transform: none;
+  }
+}

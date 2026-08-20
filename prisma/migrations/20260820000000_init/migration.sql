@@ -1,0 +1,61 @@
+-- CreateTable
+CREATE TABLE "SurveyResponse" (
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "customerRef" TEXT,
+    "respondentName" TEXT,
+    "respondentEmail" TEXT,
+    "respondentWhatsapp" TEXT,
+    "npsScore" INTEGER NOT NULL,
+    "npsBand" TEXT NOT NULL,
+    "npsReason" TEXT,
+    "journeyStage" TEXT NOT NULL,
+    "journeyStageSource" TEXT NOT NULL DEFAULT 'form',
+    "firstContact" TEXT NOT NULL,
+    "firstContactDetail" TEXT,
+    "otherFirms" TEXT NOT NULL,
+    "otherFirmsNames" TEXT,
+    "tradeMotivation" TEXT NOT NULL,
+    "tradeMotivationOther" TEXT,
+    "deskMotivations" TEXT[],
+    "deskMotivationsOther" TEXT,
+    "expectation" TEXT NOT NULL,
+    "valuePoints" TEXT[],
+    "valuePointsOther" TEXT,
+    "improvePoints" TEXT[],
+    "improvePointsOther" TEXT,
+    "improveDetailTheme" TEXT,
+    "improveDetail" TEXT,
+    "supportOutcome" TEXT,
+    "supportEase" INTEGER,
+    "failureFactor" TEXT,
+    "failureFactorOther" TEXT,
+    "realAccountTransition" TEXT,
+    "withdrawalExperience" TEXT,
+    "withdrawalDetail" TEXT,
+    "trustScore" INTEGER NOT NULL,
+    "communication" TEXT NOT NULL,
+    "desiredContents" TEXT[],
+    "repurchaseIntent" TEXT NOT NULL,
+    "repurchaseBarrier" TEXT[],
+    "repurchaseBarrierOther" TEXT,
+    "priorityFix" TEXT,
+    "priorityFixOther" TEXT,
+    "preserve" TEXT,
+    "utmSource" TEXT,
+    "utmMedium" TEXT,
+    "utmCampaign" TEXT,
+    "utmContent" TEXT,
+    "utmTerm" TEXT,
+    "referrer" TEXT,
+    "clientDurationMs" INTEGER,
+    "flagged" TEXT,
+
+    CONSTRAINT "SurveyResponse_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE INDEX "SurveyResponse_createdAt_idx" ON "SurveyResponse"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "SurveyResponse_npsBand_idx" ON "SurveyResponse"("npsBand");
