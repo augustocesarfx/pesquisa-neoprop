@@ -19,10 +19,10 @@ export const surveyConfig = {
   video: {
     provider: (process.env.NEXT_PUBLIC_SURVEY_VIDEO_PROVIDER ||
       "html5") as SurveyVideoProvider,
-    src: process.env.NEXT_PUBLIC_SURVEY_VIDEO_SRC || "",
+    src: process.env.NEXT_PUBLIC_SURVEY_VIDEO_SRC || "/video/mensagem-neoprop.mp4",
     /** Imagem de capa (poster). Opcional; caminho público ou URL. */
-    poster: process.env.NEXT_PUBLIC_SURVEY_VIDEO_POSTER || "",
-    durationLabel: "1 min 30 s",
+    poster: process.env.NEXT_PUBLIC_SURVEY_VIDEO_POSTER || "/video/poster.jpg",
+    durationLabel: "2 min 20 s",
   },
   /** Destino do botão discreto da tela final. */
   backUrl: process.env.NEXT_PUBLIC_SURVEY_BACK_URL || "https://neoprop.com.br",
