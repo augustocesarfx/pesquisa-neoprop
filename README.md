@@ -170,12 +170,9 @@ Filtre por `status = completo` quando quiser só quem terminou, ou por
 
 ## Deploy
 
-`Dockerfile` pronto (saída standalone do Next). Sem banco e sem migração: basta
-as variáveis de ambiente.
+Aplicação stateless: sem banco, sem migração, sem volume. `Dockerfile` pronto na
+raiz (saída standalone do Next).
 
-## Deploy na Vercel
-
-1. Ligue a planilha seguindo os passos da seção **Planilha** acima.
-2. Em **Settings → Environment Variables** do projeto, configure no mínimo
-   `SHEETS_WEBHOOK_URL` e `SHEETS_TOKEN`.
-3. Faça o redeploy.
+As duas variáveis obrigatórias são `SHEETS_WEBHOOK_URL` e `SHEETS_TOKEN`.
+Passo a passo, requisitos de rede e configuração atrás de proxy em
+**[DEPLOY.md](DEPLOY.md)**.
