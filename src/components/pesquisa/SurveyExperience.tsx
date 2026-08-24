@@ -14,7 +14,7 @@
  *  - utm_*: preservados pela lib compartilhada (localStorage + cookie).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
@@ -48,7 +48,9 @@ export function SurveyExperience() {
 
     // Pré-preenche a identificação quando o disparo (CRM) traz os dados
     setPrefill({
-      name: (params.get("nome") ?? params.get("name") ?? "").trim().slice(0, 200),
+      name: (params.get("nome") ?? params.get("name") ?? "")
+        .trim()
+        .slice(0, 200),
       email,
       whatsapp: (params.get("whatsapp") ?? params.get("tel") ?? "")
         .trim()
@@ -91,14 +93,17 @@ export function SurveyExperience() {
 
   return (
     <main className="np-page min-h-screen">
-      {phase === "loading" && <div className="min-h-screen" aria-hidden="true" />}
-
-      {phase === "intro" && (
-        <Intro onStart={start} />
+      {phase === "loading" && (
+        <div className="min-h-screen" aria-hidden="true" />
       )}
 
+      {phase === "intro" && <Intro onStart={start} />}
+
       {phase === "survey" && (
-        <section className="py-14 md:py-20" aria-label="Pesquisa de experiência">
+        <section
+          className="py-14 md:py-20"
+          aria-label="Pesquisa de experiência"
+        >
           <Container narrow className="max-w-2xl">
             <div className="mb-10 flex items-center gap-4">
               <NeopropLogo className="h-9 w-auto md:h-10" />
@@ -144,58 +149,73 @@ export function SurveyExperience() {
 function Intro({ onStart }: { onStart: () => void }) {
   return (
     <>
-      {/* Abertura: grid técnico, sequência orquestrada e linha de pulso */}
+      {/* Abertura: logo, headline, subtítulo e vídeo numa única coluna
+          (Figma "Section - Apresentação da pesquisa", node 3686:18) */}
       <section
-        className="np-dark relative overflow-hidden"
+        className="np-dark relative overflow-hidden border-b border-[var(--ap-border)]"
         aria-label="Apresentação da pesquisa"
       >
         <div className="np-hero-grid" aria-hidden="true" />
         <div className="np-hero-glow" aria-hidden="true" />
-        <Container narrow className="relative max-w-3xl pt-14 pb-4 md:pt-20 md:pb-6 text-center">
-          <div className="np-rise">
-            <NeopropLogo className="mx-auto h-12 w-auto md:h-14" />
-          </div>
-          <p
-            className="np-eyebrow np-rise mt-7 text-[10px] md:text-xs text-[var(--ap-text-dim)]"
-            style={{ animationDelay: "0.1s" }}
-          >
-            Pesquisa de Experiência Neoprop
-          </p>
-          <h1
-            className="np-display np-rise mt-6 text-balance text-[2rem] leading-[1.08] md:text-5xl"
-            style={{ animationDelay: "0.2s" }}
-          >
-            Você fez parte da nossa história. Agora,{" "}
-            <span className="text-[var(--ap-green-hover)]">sua voz</span>{" "}
-            precisa fazer parte do próximo capítulo.
-          </h1>
-          <p
-            className="np-rise mx-auto mt-5 max-w-xl text-balance text-base leading-relaxed text-[var(--ap-text-dim)] md:text-lg"
-            style={{ animationDelay: "0.32s" }}
-          >
-            Em apenas três minutos, conte o que te surpreendeu, o que te
-            frustrou e o que precisa mudar para construirmos uma Neoprop mais
-            segura, simples e próxima do trader.
-          </p>
-          {/* Assinatura: curva de capital que se desenha — o pulso de quem opera */}
-          <div className="np-rise mt-2" style={{ animationDelay: "0.42s" }}>
-            <PulseLine />
+        <Container
+          narrow
+          gutter="tight"
+          className="relative max-w-[1009px] pt-14 pb-14 text-center md:pt-20 md:pb-20"
+        >
+          {/* Coluna única: 340px no mobile, 945px no desktop (Figma) */}
+          <div className="mx-auto flex w-full max-w-[340px] flex-col items-center gap-5 md:max-w-[945px]">
+            <div className="np-rise">
+              <NeopropLogo className="h-12 w-auto md:h-14" />
+            </div>
+            <p
+              className="np-eyebrow np-rise inline-flex items-center rounded-[11px] border border-white/[0.37] bg-[linear-gradient(88.3deg,rgba(255,255,255,0)_0%,rgba(255,255,255,0.12)_100%)] px-[15px] py-2.5 text-[10px] md:text-xs text-[var(--ap-text-dim)]"
+              style={{ animationDelay: "0.1s" }}
+            >
+              Pesquisa de Experiência Neoprop
+            </p>
+            <h1
+              className="np-display np-hero-title np-rise w-full"
+              style={{
+                animationDelay: "0.2s",
+                // eixos variáveis da Bricolage como no Figma
+                fontVariationSettings: '"opsz" 14, "wdth" 100',
+              }}
+            >
+              Você fez parte da{" "}
+              <span className="text-[var(--ap-green-hover)]">
+                nossa história
+              </span>
+              . Agora,{" "}
+              <span className="text-[var(--ap-green-hover)]">sua voz</span>{" "}
+              precisa fazer parte do{" "}
+              <span className="text-[var(--ap-green-hover)]">
+                próximo capítulo.
+              </span>
+            </h1>
+            <p
+              className="np-hero-sub np-rise text-[var(--ap-text-dim)]"
+              style={{ animationDelay: "0.32s" }}
+            >
+              Em apenas <Em>três minutos</Em>, conte o que te{" "}
+              <Em>surpreendeu</Em>, o que te <Em>frustrou</Em> e o que{" "}
+              <Em>precisa mudar</Em> para construirmos uma{" "}
+              <Em>Neoprop mais segura</Em>, <Em>simples</Em> e{" "}
+              <Em>próxima do trader.</Em>
+            </p>
+            <div
+              className="np-rise mt-1 w-full md:max-w-[750px]"
+              style={{ animationDelay: "0.42s" }}
+            >
+              <SurveyVideo />
+            </div>
           </div>
         </Container>
       </section>
 
-      {/* Vídeo */}
-      <section className="bg-[var(--ap-bg)] py-14 md:py-20" aria-label="Mensagem em vídeo">
-        <Container narrow className="max-w-3xl">
-          <Reveal>
-            <SurveyVideo />
-          </Reveal>
-        </Container>
-      </section>
-
-      {/* Transição para a pesquisa */}
+      {/* Transição para a pesquisa — `esconder` a mantém oculta até o player
+          VTurb liberar (delay em surveyConfig.vturb.delaySeconds) */}
       <section
-        className="bg-[var(--ap-bg-2)] py-16 md:py-24"
+        className="esconder bg-[var(--ap-bg-2)] py-16 md:py-24"
         aria-label="Começar a pesquisa"
       >
         <Container narrow className="max-w-2xl text-center">
@@ -241,7 +261,10 @@ function Intro({ onStart }: { onStart: () => void }) {
 
           <Reveal delay={160}>
             <div className="mt-10">
-              <Button onClick={onStart} className="w-full max-w-sm md:w-auto md:px-12">
+              <Button
+                onClick={onStart}
+                className="w-full max-w-sm md:w-auto md:px-12"
+              >
                 Começar pesquisa
               </Button>
             </div>
@@ -252,33 +275,10 @@ function Intro({ onStart }: { onStart: () => void }) {
   );
 }
 
-/** Curva de capital estilizada que se desenha no carregamento do hero. */
-function PulseLine() {
+/** Trecho em destaque do subtítulo (os bolds do Figma). */
+function Em({ children }: { children: ReactNode }) {
   return (
-    <svg
-      viewBox="0 0 640 96"
-      className="mx-auto h-16 w-full max-w-xl md:h-20"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        className="np-pulse-line"
-        pathLength={1000}
-        d="M8 78 C 60 74, 92 80, 128 68 S 190 42, 226 52 S 282 70, 318 54 S 372 22, 410 34 S 466 52, 502 36 S 570 12, 616 18"
-        stroke="var(--ap-green)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        opacity="0.85"
-      />
-      <circle
-        className="np-pulse-dot"
-        cx="616"
-        cy="18"
-        r="4"
-        fill="var(--ap-green-hover)"
-        style={{ transformOrigin: "616px 18px" }}
-      />
-    </svg>
+    <strong className="font-bold text-[var(--ap-text)]">{children}</strong>
   );
 }
 
@@ -289,7 +289,11 @@ function ThankYou() {
     <section className="py-20 md:py-32" aria-label="Pesquisa concluída">
       <Container narrow className="max-w-2xl text-center">
         <NeopropLogo className="mx-auto mb-10 h-10 w-auto" />
-        <svg viewBox="0 0 100 100" className="mx-auto size-16" aria-hidden="true">
+        <svg
+          viewBox="0 0 100 100"
+          className="mx-auto size-16"
+          aria-hidden="true"
+        >
           <circle
             className="np-seal-circle"
             cx="50"

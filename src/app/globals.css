@@ -89,6 +89,34 @@
   text-transform: uppercase;
 }
 
+/* Medidas da abertura (Figma node 3686:18). Ficam aqui, e não em utilitários
+   Tailwind, porque .np-display é CSS sem layer e venceria o utilitário. */
+.np-hero-title {
+  font-size: 32px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.np-hero-sub {
+  width: 100%;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+@media (min-width: 768px) {
+  .np-hero-title {
+    font-size: 47px;
+  }
+
+  .np-hero-sub {
+    width: 675px;
+    max-width: 100%;
+    font-size: 18px;
+    letter-spacing: -0.03em;
+  }
+}
+
 .np-mono {
   font-family: var(--font-np-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
@@ -125,36 +153,6 @@
     rgba(15, 167, 80, 0.09),
     transparent 70%
   );
-}
-
-/* --- Assinatura: linha de pulso (curva de capital que se desenha) ------- */
-
-.np-pulse-line {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: np-pulse-draw 2.4s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
-}
-
-@keyframes np-pulse-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-.np-pulse-dot {
-  opacity: 0;
-  animation: np-pulse-dot-in 0.5s ease-out 2.6s forwards;
-}
-
-@keyframes np-pulse-dot-in {
-  from {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 /* --- Sequência de entrada do hero (carregamento orquestrado) ------------ */
@@ -477,20 +475,12 @@
   .np-step-enter,
   .ap-cta-enter,
   .np-rise,
-  .np-pulse-line,
-  .np-pulse-dot,
   .np-option[data-checked="true"] .np-dot {
     animation: none;
   }
   .np-rise {
     opacity: 1;
     transform: none;
-  }
-  .np-pulse-line {
-    stroke-dashoffset: 0;
-  }
-  .np-pulse-dot {
-    opacity: 1;
   }
   .np-seal-circle,
   .np-seal-check {
@@ -507,4 +497,14 @@
   .np-scale-cell:hover {
     transform: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Delay do player VTurb
+   Elementos com .esconder nascem ocultos e só aparecem quando o player libera
+   (ver src/components/pesquisa/SurveyVideo.tsx). O VTurb revela aplicando
+   display inline, que vence esta regra por especificidade.
+--------------------------------------------------------------------------- */
+.esconder {
+  display: none;
 }

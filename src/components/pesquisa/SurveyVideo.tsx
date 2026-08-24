@@ -10,8 +10,9 @@
  * fallback — o vídeo nunca condiciona o acesso à pesquisa.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { surveyConfig } from "@/config/survey";
+import type { VturbSmartplayerElement } from "@/types/vturb";
 import { NeopropLogo } from "./NeopropLogo";
 
 export function SurveyVideo() {
@@ -19,6 +20,9 @@ export function SurveyVideo() {
   const [activated, setActivated] = useState(false);
   const [failed, setFailed] = useState(false);
   const configured = Boolean(src);
+
+  // O VTurb monta o próprio player e controla o delay dos `.esconder`.
+  if (provider === "vturb") return <VturbPlayer />;
 
   const embedSrc = (() => {
     switch (provider) {
@@ -146,5 +150,90 @@ function PosterPattern() {
         strokeLinecap="round"
       />
     </svg>
+  );
+}
+
+/**
+ * Player VTurb (ConverteAI).
+ *
+ * Monta o custom element <vturb-smartplayer> e injeta o player.js uma única
+ * vez. Quando o player fica pronto, pedimos a ele que revele os elementos
+ * `.esconder` (a seção "Agora queremos ouvir você") depois de
+ * `delaySeconds` de vídeo assistido — `persist: true` faz o VTurb lembrar,
+ * então quem já passou do delay não espera de novo ao recarregar.
+ *
+ * Se o player.js não carregar (adblock, CDN fora), o failsafe revela a seção
+ * assim mesmo: o vídeo nunca pode trancar o acesso à pesquisa.
+ */
+function VturbPlayer() {
+  const {
+    playerId,
+    accountId,
+    aspectPaddingTop,
+    delaySeconds,
+    failsafeSeconds,
+  } = surveyConfig.vturb;
+  const playerRef = useRef<VturbSmartplayerElement>(null);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    let ready = false;
+
+    const onReady = () => {
+      ready = true;
+      player.displayHiddenElements?.(delaySeconds, [".esconder"], {
+        persist: true,
+      });
+    };
+    player.addEventListener("player:ready", onReady);
+
+    const scriptSrc = `https://scripts.converteai.net/${accountId}/players/${playerId}/v4/player.js`;
+    if (!document.querySelector(`script[src="${scriptSrc}"]`)) {
+      const s = document.createElement("script");
+      s.src = scriptSrc;
+      s.async = true;
+      document.head.appendChild(s);
+    }
+
+    const failsafe =
+      failsafeSeconds > 0
+        ? window.setTimeout(() => {
+            if (ready) return;
+            document
+              .querySelectorAll<HTMLElement>(".esconder")
+              .forEach((el) => {
+                el.style.display = "block";
+              });
+          }, failsafeSeconds * 1000)
+        : 0;
+
+    return () => {
+      player.removeEventListener("player:ready", onReady);
+      if (failsafe) window.clearTimeout(failsafe);
+    };
+  }, [accountId, playerId, delaySeconds, failsafeSeconds]);
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--ap-border-strong)] bg-[var(--ap-tile-dark)] shadow-[var(--ap-shadow-panel)]">
+      {/* A proporção vem do próprio placeholder do VTurb — zero layout shift */}
+      <vturb-smartplayer
+        ref={playerRef}
+        id={`vid-${playerId}`}
+        style={{ display: "block", margin: "0 auto", width: "100%" }}
+      >
+        <div
+          className="vturb-player-placeholder"
+          style={{
+            position: "relative",
+            width: "100%",
+            padding: `${aspectPaddingTop} 0 0`,
+            zIndex: 0,
+            backgroundColor: "black",
+          }}
+        />
+      </vturb-smartplayer>
+    </div>
   );
 }
