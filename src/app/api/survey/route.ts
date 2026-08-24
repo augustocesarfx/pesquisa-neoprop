@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { upsertRow, sheetConfigured } from "@/lib/sheet";
+import { cell, type SurveyRow } from "@/lib/survey-row";
 import {
   type SurveyAnswers,
   journeyStages,
@@ -31,19 +31,27 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Recebe e persiste uma resposta da pesquisa de experiência Neoprop.
+ * Recebe uma resposta da pesquisa e grava na planilha do Google.
  *
- * - Validação por whitelist de todos os valores de escolha;
- * - Sanitização dos campos abertos (trim, remoção de caracteres de
- *   controle, limite de tamanho);
- * - Idempotência: o id vem do cliente — reenvio do mesmo id responde ok
- *   sem duplicar (previne duplo clique/reenvio após queda de rede);
- * - Antispam sem atrito: honeypot + tempo mínimo de preenchimento marcam
- *   a resposta com "flagged", mas NUNCA a descartam silenciosamente;
- * - Rate limit simples por IP (memória do processo).
+ * Dois modos, ambos gravando na MESMA linha (upsert pelo `id`):
+ *
+ *  - parcial (`partial: true`): disparado a cada passo respondido. Aceita
+ *    respostas incompletas, valida só o que veio preenchido e marca a linha
+ *    como "parcial". É o que garante o registro de quem abandona no meio;
+ *  - final: validação estrita por whitelist de todos os campos obrigatórios
+ *    e das ramificações, e marca a linha como "completo".
+ *
+ * Outras garantias mantidas do desenho original:
+ *  - sanitização dos campos abertos (trim, controle, limite de tamanho);
+ *  - idempotência pelo `id` gerado no cliente (reenvio não duplica linha);
+ *  - antispam sem atrito: honeypot + tempo mínimo marcam "flagged", nunca
+ *    descartam a resposta silenciosamente;
+ *  - rate limit por IP (memória do processo).
  */
 
-const RATE_LIMIT = 10; // envios por IP por hora
+// Parciais gravam a cada passo, então o teto por IP é bem mais alto que o
+// de envios finais — são ~20 escritas por respondente numa pesquisa inteira.
+const RATE_LIMIT = 120; // requisições por IP por hora
 const rateMap = new Map<string, number[]>();
 
 function rateLimited(ip: string): boolean {
@@ -86,6 +94,11 @@ function intInRange(value: unknown, min: number, max: number): number | null {
   return n;
 }
 
+/**
+ * Filtra um array pela whitelist. Devolve null quando o conteúdo é inválido
+ * (vazio ou acima do limite) — no modo parcial o chamador trata null como
+ * "ainda não respondido" em vez de erro.
+ */
 function cleanArray(
   value: unknown,
   options: { value: string }[],
@@ -112,55 +125,58 @@ type SubmitBody = {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  /** true = autosave de progresso; ausente/false = envio final */
+  partial?: boolean;
+  /** contexto do autosave, só para leitura humana na planilha */
+  lastStep?: string;
+  stepNumber?: number;
+  stepTotal?: number;
 };
+
+const invalid = (error: string, status = 400) =>
+  NextResponse.json({ ok: false, error }, { status });
 
 export async function POST(req: NextRequest) {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (rateLimited(ip)) {
-    return NextResponse.json(
-      { ok: false, error: "rate_limited" },
-      { status: 429 }
-    );
-  }
+  if (rateLimited(ip)) return invalid("rate_limited", 429);
 
   let body: SubmitBody;
   try {
     body = (await req.json()) as SubmitBody;
   } catch {
-    return NextResponse.json(
-      { ok: false, error: "invalid_json" },
-      { status: 400 }
-    );
+    return invalid("invalid_json");
   }
 
   const id = clean(body.responseId, 64);
   const a = body.answers;
   if (!id || id.length < 8 || !a || typeof a !== "object") {
-    return NextResponse.json(
-      { ok: false, error: "invalid_payload" },
-      { status: 400 }
-    );
+    return invalid("invalid_payload");
   }
 
-  /* --- Identificação do respondente (primeira etapa, obrigatória) ---- */
+  const partial = body.partial === true;
+
+  /* --- Identificação do respondente (primeira etapa) ------------------ */
 
   const respondentName = clean(a.respondentName, 200);
   const respondentEmail = clean(a.respondentEmail, 200).toLowerCase();
   const respondentWhatsapp = clean(a.respondentWhatsapp, 30).replace(/\D/g, "");
-  if (
-    respondentName.length < 2 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(respondentEmail) ||
-    respondentWhatsapp.length < 10 ||
-    respondentWhatsapp.length > 13
-  ) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_answers" },
-      { status: 400 }
-    );
+  const identityValid =
+    respondentName.length >= 2 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(respondentEmail) &&
+    respondentWhatsapp.length >= 10 &&
+    respondentWhatsapp.length <= 13;
+
+  // No final a identificação é obrigatória. No parcial, uma linha sem nenhum
+  // dado de contato não serve para nada — melhor não poluir a planilha.
+  if (!identityValid) {
+    if (!partial) return invalid("invalid_answers");
+    if (!respondentName && !respondentEmail && !respondentWhatsapp) {
+      return NextResponse.json({ ok: true, skipped: "sem_identificacao" });
+    }
   }
 
-  /* --- Campos obrigatórios ------------------------------------------ */
+  /* --- Campos de escolha única --------------------------------------- */
 
   const npsScore = intInRange(a.npsScore, 0, 10);
   const trustScore = intInRange(a.trustScore, 0, 10);
@@ -173,199 +189,224 @@ export async function POST(req: NextRequest) {
   const repurchaseIntent = clean(a.repurchaseIntent, 40);
   const priorityFix = clean(a.priorityFix, 40);
 
-  const deskMotivationList = cleanArray(a.deskMotivations, deskMotivations, deskMotivations.length);
+  const deskMotivationList = cleanArray(
+    a.deskMotivations,
+    deskMotivations,
+    deskMotivations.length
+  );
   const valuePoints = cleanArray(a.valuePoints, valueOptions(journeyStage), 2);
   const improvePoints = cleanArray(a.improvePoints, improveOptions(journeyStage), 3);
   const desiredContentList = cleanArray(a.desiredContents, desiredContents, 3);
 
-  const valid =
-    npsScore !== null &&
-    trustScore !== null &&
-    inSet(journeyStage, journeyStages) &&
-    inSet(firstContact, firstContacts) &&
-    (otherFirms === "yes" || otherFirms === "no") &&
-    inSet(tradeMotivation, tradeMotivations) &&
-    inSet(expectation, expectations) &&
-    inSet(communication, communications) &&
-    inSet(repurchaseIntent, repurchaseIntents) &&
-    inSet(priorityFix, priorityOptions(journeyStage)) &&
-    deskMotivationList !== null &&
-    valuePoints !== null &&
-    improvePoints !== null &&
-    desiredContentList !== null;
-
-  if (!valid) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_answers" },
-      { status: 400 }
-    );
+  if (!partial) {
+    const valid =
+      npsScore !== null &&
+      trustScore !== null &&
+      inSet(journeyStage, journeyStages) &&
+      inSet(firstContact, firstContacts) &&
+      (otherFirms === "yes" || otherFirms === "no") &&
+      inSet(tradeMotivation, tradeMotivations) &&
+      inSet(expectation, expectations) &&
+      inSet(communication, communications) &&
+      inSet(repurchaseIntent, repurchaseIntents) &&
+      inSet(priorityFix, priorityOptions(journeyStage)) &&
+      deskMotivationList !== null &&
+      valuePoints !== null &&
+      improvePoints !== null &&
+      desiredContentList !== null;
+    if (!valid) return invalid("invalid_answers");
   }
 
   /* --- Ramificações: aceita apenas o que a jornada/seleções permitem -- */
 
   const answersForBranch = {
     ...a,
-    valuePoints,
-    improvePoints,
+    valuePoints: valuePoints ?? [],
+    improvePoints: improvePoints ?? [],
     journeyStage,
   } as SurveyAnswers;
 
   const supportActive = supportBranchActive(answersForBranch);
   const supportOutcome = supportActive ? clean(a.supportOutcome, 40) : "";
   const supportEase = supportActive ? intInRange(a.supportEase, 1, 5) : null;
-  if (supportActive && (!inSet(supportOutcome, supportOutcomes) || supportEase === null)) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (
+    !partial &&
+    supportActive &&
+    (!inSet(supportOutcome, supportOutcomes) || supportEase === null)
+  ) {
+    return invalid("invalid_answers");
   }
 
   const failureActive = reprovedOrAbandonedStages.has(journeyStage);
   const failureFactor = failureActive ? clean(a.failureFactor, 40) : "";
-  if (failureActive && !inSet(failureFactor, failureFactors)) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (!partial && failureActive && !inSet(failureFactor, failureFactors)) {
+    return invalid("invalid_answers");
   }
 
   const transitionActive = realAccountStages.has(journeyStage);
   const realAccountTransition = transitionActive
     ? clean(a.realAccountTransition, 40)
     : "";
-  if (transitionActive && !inSet(realAccountTransition, transitions)) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (!partial && transitionActive && !inSet(realAccountTransition, transitions)) {
+    return invalid("invalid_answers");
   }
 
   const withdrawalActive = withdrawalStages.has(journeyStage);
   const withdrawalExperience = withdrawalActive
     ? clean(a.withdrawalExperience, 40)
     : "";
-  if (withdrawalActive && !inSet(withdrawalExperience, withdrawalExperiences)) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (
+    !partial &&
+    withdrawalActive &&
+    !inSet(withdrawalExperience, withdrawalExperiences)
+  ) {
+    return invalid("invalid_answers");
   }
 
   const barrierRequired = repurchaseIntent !== REPURCHASE_FIRST_CHOICE;
   const repurchaseBarrier = barrierRequired
     ? cleanArray(a.repurchaseBarrier, repurchaseBarriers, 3)
     : [];
-  if (barrierRequired && repurchaseBarrier === null) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (!partial && barrierRequired && repurchaseBarrier === null) {
+    return invalid("invalid_answers");
   }
 
   // Detalhes obrigatórios: quem marca "Outro" ou relata um problema
   // crítico precisa escrever o que aconteceu (espelha a validação do cliente).
-  const missingRequiredDetail =
-    (firstContact === "other" && !cleanOptional(a.firstContactDetail)) ||
-    (tradeMotivation === "other" && !cleanOptional(a.tradeMotivationOther)) ||
-    (deskMotivationList.includes("other") && !cleanOptional(a.deskMotivationsOther)) ||
-    (valuePoints.includes("other") && !cleanOptional(a.valuePointsOther)) ||
-    (improvePoints.includes("other") && !cleanOptional(a.improvePointsOther)) ||
-    (criticalTheme(improvePoints) !== null && !cleanOptional(a.improveDetail)) ||
-    (failureActive && failureFactor === "other" && !cleanOptional(a.failureFactorOther)) ||
-    (withdrawalActive &&
-      withdrawalProblemValues.has(withdrawalExperience) &&
-      !cleanOptional(a.withdrawalDetail)) ||
-    (barrierRequired &&
-      (repurchaseBarrier ?? []).includes("other") &&
-      !cleanOptional(a.repurchaseBarrierOther)) ||
-    (priorityFix === "other" && !cleanOptional(a.priorityFixOther));
-  if (missingRequiredDetail) {
-    return NextResponse.json({ ok: false, error: "invalid_answers" }, { status: 400 });
+  if (!partial) {
+    const missingRequiredDetail =
+      (firstContact === "other" && !cleanOptional(a.firstContactDetail)) ||
+      (tradeMotivation === "other" && !cleanOptional(a.tradeMotivationOther)) ||
+      ((deskMotivationList ?? []).includes("other") &&
+        !cleanOptional(a.deskMotivationsOther)) ||
+      ((valuePoints ?? []).includes("other") && !cleanOptional(a.valuePointsOther)) ||
+      ((improvePoints ?? []).includes("other") &&
+        !cleanOptional(a.improvePointsOther)) ||
+      (criticalTheme(improvePoints ?? []) !== null && !cleanOptional(a.improveDetail)) ||
+      (failureActive &&
+        failureFactor === "other" &&
+        !cleanOptional(a.failureFactorOther)) ||
+      (withdrawalActive &&
+        withdrawalProblemValues.has(withdrawalExperience) &&
+        !cleanOptional(a.withdrawalDetail)) ||
+      (barrierRequired &&
+        (repurchaseBarrier ?? []).includes("other") &&
+        !cleanOptional(a.repurchaseBarrierOther)) ||
+      (priorityFix === "other" && !cleanOptional(a.priorityFixOther));
+    if (missingRequiredDetail) return invalid("invalid_answers");
   }
-
-  const customerRef = cleanOptional(body.customerRef, 200);
 
   /* --- Classificação interna + antispam ------------------------------ */
 
   const npsBand =
-    npsScore <= 6 ? "detractor" : npsScore <= 8 ? "neutral" : "promoter";
+    npsScore === null
+      ? null
+      : npsScore <= 6
+        ? "detractor"
+        : npsScore <= 8
+          ? "neutral"
+          : "promoter";
 
   const elapsedMs = intInRange(body.elapsedMs, 0, 24 * 60 * 60 * 1000);
   let flagged: string | null = null;
   if (clean(body.website, 200)) flagged = "honeypot";
-  else if (elapsedMs !== null && elapsedMs < 15_000) flagged = "too_fast";
+  // "rápido demais" só faz sentido no envio final — um parcial é rápido por natureza
+  else if (!partial && elapsedMs !== null && elapsedMs < 15_000) flagged = "too_fast";
 
-  const detailTheme = criticalTheme(improvePoints);
+  const detailTheme = criticalTheme(improvePoints ?? []);
 
-  /* --- Persistência --------------------------------------------------- */
+  const stepNumber = intInRange(body.stepNumber, 1, 99);
+  const stepTotal = intInRange(body.stepTotal, 1, 99);
 
-  const data = {
+  /* --- Linha da planilha ---------------------------------------------- */
+
+  const row: SurveyRow = {
     id,
-    customerRef,
-    respondentName,
-    respondentEmail,
-    respondentWhatsapp,
+    updatedAt: new Date().toISOString(),
+    status: partial ? "parcial" : "completo",
+    lastStep: cell(clean(body.lastStep, 40)),
+    progress: stepNumber && stepTotal ? `${stepNumber}/${stepTotal}` : null,
+    respondentName: cell(respondentName),
+    respondentEmail: cell(respondentEmail),
+    respondentWhatsapp: cell(respondentWhatsapp),
+    customerRef: cell(cleanOptional(body.customerRef, 200)),
     npsScore,
-    npsBand,
-    npsReason: cleanOptional(a.npsReason),
-    journeyStage,
+    npsBand: cell(npsBand),
+    npsReason: cell(cleanOptional(a.npsReason)),
+    journeyStage: cell(journeyStage),
     journeyStageSource: a.journeyStageSource === "url" ? "url" : "form",
-    firstContact,
-    firstContactDetail: cleanOptional(a.firstContactDetail),
-    otherFirms,
-    otherFirmsNames: otherFirms === "yes" ? cleanOptional(a.otherFirmsNames) : null,
-    tradeMotivation,
+    firstContact: cell(firstContact),
+    firstContactDetail: cell(cleanOptional(a.firstContactDetail)),
+    otherFirms: cell(otherFirms),
+    otherFirmsNames:
+      otherFirms === "yes" ? cell(cleanOptional(a.otherFirmsNames)) : null,
+    tradeMotivation: cell(tradeMotivation),
     tradeMotivationOther:
-      tradeMotivation === "other" ? cleanOptional(a.tradeMotivationOther) : null,
-    deskMotivations: deskMotivationList,
-    deskMotivationsOther: deskMotivationList.includes("other")
-      ? cleanOptional(a.deskMotivationsOther)
+      tradeMotivation === "other" ? cell(cleanOptional(a.tradeMotivationOther)) : null,
+    deskMotivations: cell(deskMotivationList),
+    deskMotivationsOther: (deskMotivationList ?? []).includes("other")
+      ? cell(cleanOptional(a.deskMotivationsOther))
       : null,
-    expectation,
-    valuePoints,
-    valuePointsOther: valuePoints.includes("other")
-      ? cleanOptional(a.valuePointsOther)
+    expectation: cell(expectation),
+    valuePoints: cell(valuePoints),
+    valuePointsOther: (valuePoints ?? []).includes("other")
+      ? cell(cleanOptional(a.valuePointsOther))
       : null,
-    improvePoints,
-    improvePointsOther: improvePoints.includes("other")
-      ? cleanOptional(a.improvePointsOther)
+    improvePoints: cell(improvePoints),
+    improvePointsOther: (improvePoints ?? []).includes("other")
+      ? cell(cleanOptional(a.improvePointsOther))
       : null,
-    improveDetailTheme: detailTheme,
-    improveDetail: detailTheme ? cleanOptional(a.improveDetail) : null,
-    supportOutcome: supportActive ? supportOutcome : null,
+    improveDetailTheme: cell(detailTheme),
+    improveDetail: detailTheme ? cell(cleanOptional(a.improveDetail)) : null,
+    supportOutcome: supportActive ? cell(supportOutcome) : null,
     supportEase,
-    failureFactor: failureActive ? failureFactor : null,
+    failureFactor: failureActive ? cell(failureFactor) : null,
     failureFactorOther:
       failureActive && failureFactor === "other"
-        ? cleanOptional(a.failureFactorOther)
+        ? cell(cleanOptional(a.failureFactorOther))
         : null,
-    realAccountTransition: transitionActive ? realAccountTransition : null,
-    withdrawalExperience: withdrawalActive ? withdrawalExperience : null,
-    withdrawalDetail: withdrawalActive ? cleanOptional(a.withdrawalDetail) : null,
+    realAccountTransition: transitionActive ? cell(realAccountTransition) : null,
+    withdrawalExperience: withdrawalActive ? cell(withdrawalExperience) : null,
+    withdrawalDetail: withdrawalActive ? cell(cleanOptional(a.withdrawalDetail)) : null,
     trustScore,
-    communication,
-    desiredContents: desiredContentList,
-    repurchaseIntent,
-    repurchaseBarrier: repurchaseBarrier ?? [],
+    communication: cell(communication),
+    desiredContents: cell(desiredContentList),
+    repurchaseIntent: cell(repurchaseIntent),
+    repurchaseBarrier: cell(repurchaseBarrier),
     repurchaseBarrierOther:
       barrierRequired && (repurchaseBarrier ?? []).includes("other")
-        ? cleanOptional(a.repurchaseBarrierOther)
+        ? cell(cleanOptional(a.repurchaseBarrierOther))
         : null,
-    priorityFix,
+    priorityFix: cell(priorityFix),
     priorityFixOther:
-      priorityFix === "other" ? cleanOptional(a.priorityFixOther) : null,
-    preserve: cleanOptional(a.preserve),
-    utmSource: cleanOptional(body.utm_source, 200),
-    utmMedium: cleanOptional(body.utm_medium, 200),
-    utmCampaign: cleanOptional(body.utm_campaign, 200),
-    utmContent: cleanOptional(body.utm_content, 200),
-    utmTerm: cleanOptional(body.utm_term, 200),
-    referrer: cleanOptional(body.referrer, 500),
+      priorityFix === "other" ? cell(cleanOptional(a.priorityFixOther)) : null,
+    preserve: cell(cleanOptional(a.preserve)),
+    utmSource: cell(cleanOptional(body.utm_source, 200)),
+    utmMedium: cell(cleanOptional(body.utm_medium, 200)),
+    utmCampaign: cell(cleanOptional(body.utm_campaign, 200)),
+    utmContent: cell(cleanOptional(body.utm_content, 200)),
+    utmTerm: cell(cleanOptional(body.utm_term, 200)),
+    referrer: cell(cleanOptional(body.referrer, 500)),
     clientDurationMs: elapsedMs,
-    flagged,
+    flagged: cell(flagged),
   };
 
-  try {
-    await prisma.surveyResponse.create({ data });
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      // Mesmo id já gravado (reenvio) — idempotente, sem duplicar.
-      return NextResponse.json({ ok: true, duplicate: true });
-    }
-    console.error("[survey] Falha ao gravar resposta:", error);
-    return NextResponse.json(
-      { ok: false, error: "storage_failed" },
-      { status: 500 }
-    );
+  if (!sheetConfigured()) {
+    console.error("[survey] SHEETS_WEBHOOK_URL/SHEETS_TOKEN ausentes.");
+    // Sem planilha configurada um parcial some em silêncio (é só progresso),
+    // mas o envio final precisa avisar o usuário em vez de fingir sucesso.
+    return partial
+      ? NextResponse.json({ ok: true, skipped: "sheet_not_configured" })
+      : invalid("storage_failed", 500);
   }
 
-  return NextResponse.json({ ok: true });
+  const result = await upsertRow(row);
+  if (!result.ok) {
+    console.error("[survey] Falha ao gravar na planilha:", result.error);
+    return partial
+      ? NextResponse.json({ ok: true, skipped: result.error })
+      : invalid("storage_failed", 500);
+  }
+
+  return NextResponse.json({ ok: true, created: result.created });
 }

@@ -7,7 +7,7 @@
  * refresh) e envio idempotente ao servidor.
  *
  * O rascunho local é apenas recuperação de sessão — a persistência
- * definitiva acontece no POST /api/survey (Postgres via Prisma).
+ * definitiva acontece no POST /api/survey (planilha do Google).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -286,6 +286,96 @@ export function SurveyWizard({
     el.focus({ preventScroll: true });
   }, [stepIndex]);
 
+  /**
+   * Monta o corpo enviado à API. O mesmo formato serve para o autosave
+   * (partial) e para o envio final — muda só o flag e o contexto do passo.
+   */
+  const buildPayload = useCallback(
+    (d: Draft, options: { partial: boolean; stepId?: string; stepNumber?: number; stepTotal?: number }) => {
+      const utms = getStoredUtms();
+      return {
+        responseId: d.id,
+        answers: d.answers,
+        customerRef,
+        elapsedMs: Date.now() - d.startedAt,
+        referrer: d.referrer,
+        website: honeypot, // honeypot — humanos nunca preenchem
+        utm_source: utms.utm_source ?? "",
+        utm_medium: utms.utm_medium ?? "",
+        utm_campaign: utms.utm_campaign ?? "",
+        utm_content: utms.utm_content ?? "",
+        utm_term: utms.utm_term ?? "",
+        partial: options.partial,
+        lastStep: options.stepId,
+        stepNumber: options.stepNumber,
+        stepTotal: options.stepTotal,
+      };
+    },
+    [customerRef, honeypot]
+  );
+
+  /* --- Autosave: registra o progresso mesmo se a pessoa não terminar ---
+   *
+   * Grava na mesma linha da planilha a cada passo alcançado (debounce de
+   * 1,5 s para não escrever a cada clique rápido) e mais uma vez quando a
+   * aba é fechada/escondida, via sendBeacon. Falha de rede aqui é sempre
+   * silenciosa: isso é telemetria de progresso, não pode atrapalhar quem
+   * está respondendo.
+   */
+
+  // Sempre o rascunho mais recente, para o handler de saída da página.
+  const draftRef = useRef<Draft | null>(null);
+  draftRef.current = draft;
+  const stepMetaRef = useRef({ stepId: step, stepNumber: stepIndex + 1, stepTotal: steps.length });
+  stepMetaRef.current = { stepId: step, stepNumber: stepIndex + 1, stepTotal: steps.length };
+  const doneRef = useRef(false);
+
+  // Sem identificação a linha não serve para nada — evita requisição à toa.
+  const hasIdentity = (d: Draft) =>
+    d.answers.respondentName.trim().length >= 2 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.answers.respondentEmail.trim()) &&
+    d.answers.respondentWhatsapp.replace(/\D/g, "").length >= 10;
+
+  useEffect(() => {
+    const d = draft;
+    if (!d || doneRef.current || !hasIdentity(d)) return;
+    const timer = window.setTimeout(() => {
+      const meta = stepMetaRef.current;
+      void fetch("/api/survey", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload(d, { partial: true, ...meta })),
+        keepalive: true,
+      }).catch(() => {
+        // progresso perdido não interrompe a pesquisa
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+    // Só o avanço de etapa dispara: digitar não deve gerar uma escrita por tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepIndex]);
+
+  useEffect(() => {
+    const flush = () => {
+      const d = draftRef.current;
+      if (!d || doneRef.current || !hasIdentity(d)) return;
+      const payload = buildPayload(d, { partial: true, ...stepMetaRef.current });
+      const blob = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+      navigator.sendBeacon?.("/api/survey", blob);
+    };
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [buildPayload]);
+
   /** Validação da etapa atual; retorna mensagem de erro ou null. */
   const validate = (): string | null => {
     const a = answers;
@@ -392,24 +482,18 @@ export function SurveyWizard({
     if (!draft || submitState === "sending") return;
     setSubmitState("sending");
     setError(null);
-    const utms = getStoredUtms();
     try {
       const res = await fetch("/api/survey", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          responseId: draft.id,
-          answers: draft.answers,
-          customerRef,
-          elapsedMs: Date.now() - draft.startedAt,
-          referrer: draft.referrer,
-          website: honeypot, // honeypot — humanos nunca preenchem
-          utm_source: utms.utm_source ?? "",
-          utm_medium: utms.utm_medium ?? "",
-          utm_campaign: utms.utm_campaign ?? "",
-          utm_content: utms.utm_content ?? "",
-          utm_term: utms.utm_term ?? "",
-        }),
+        body: JSON.stringify(
+          buildPayload(draft, {
+            partial: false,
+            stepId: step,
+            stepNumber: stepIndex + 1,
+            stepTotal: steps.length,
+          })
+        ),
       });
       const data = (await res.json().catch(() => null)) as {
         ok?: boolean;
@@ -417,7 +501,9 @@ export function SurveyWizard({
       if (!res.ok || !data?.ok) {
         throw new Error(`status ${res.status}`);
       }
-      // Sucesso confirmado pelo servidor: limpa o rascunho e marca o envio.
+      // Sucesso confirmado pelo servidor: encerra o autosave, limpa o
+      // rascunho e marca o envio.
+      doneRef.current = true;
       try {
         localStorage.removeItem(DRAFT_KEY);
         localStorage.setItem(DONE_KEY, new Date().toISOString());

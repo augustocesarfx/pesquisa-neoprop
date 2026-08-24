@@ -2,8 +2,8 @@
 
 Pesquisa de NPS e experiência enviada à base de clientes e ex-clientes da
 Neoprop. Sem oferta, sem venda: abertura com vídeo, 17 perguntas em quatro
-blocos narrativos, ramificações por momento da jornada e respostas gravadas em
-Postgres.
+blocos narrativos, ramificações por momento da jornada e respostas gravadas
+numa planilha do Google — inclusive as de quem não termina.
 
 Projeto **standalone** — nada aqui é compartilhado com outros produtos.
 
@@ -11,13 +11,12 @@ Projeto **standalone** — nada aqui é compartilhado com outros produtos.
 
 - Next.js 16 (App Router) · React 19 · TypeScript strict
 - Tailwind CSS 4 — tokens da marca em `src/app/globals.css`
-- Prisma + PostgreSQL
+- Planilha do Google via Apps Script — sem banco de dados
 - Zero dependências de UI/animação: tudo é CSS e SVG próprios
 
 ```bash
 npm install
-cp .env.example .env     # preencha DATABASE_URL e EXPORT_TOKEN
-npx prisma migrate deploy
+cp .env.example .env     # preencha SHEETS_WEBHOOK_URL e SHEETS_TOKEN
 npm run dev              # http://localhost:3000
 ```
 
@@ -25,15 +24,88 @@ npm run dev              # http://localhost:3000
 
 | Variável | Obrigatória | O que faz |
 | --- | --- | --- |
-| `DATABASE_URL` | sim | Conexão Postgres onde as respostas são gravadas |
-| `EXPORT_TOKEN` | sim | Token que libera `/api/export`. Sem ele, o export fica fechado |
+| `SHEETS_WEBHOOK_URL` | sim | URL do Web App do Apps Script publicado a partir da planilha |
+| `SHEETS_TOKEN` | sim | Segredo compartilhado com o Apps Script. Sem ele nada é gravado |
 | `APP_URL` | não | URL pública, usada no card de compartilhamento |
-| `NEXT_PUBLIC_SURVEY_VIDEO_PROVIDER` | não | `html5` (padrão), `youtube`, `vimeo` ou `embed` |
+| `NEXT_PUBLIC_SURVEY_VIDEO_PROVIDER` | não | `vturb` (padrão), `html5`, `youtube`, `vimeo` ou `embed` |
+| `NEXT_PUBLIC_VTURB_PLAYER_ID` | não | ID do player VTurb (só no provider `vturb`) |
+| `NEXT_PUBLIC_VTURB_ACCOUNT_ID` | não | ID da conta VTurb/ConverteAI (só no provider `vturb`) |
 | `NEXT_PUBLIC_SURVEY_VIDEO_SRC` | não | URL do .mp4 (html5), ID do vídeo (youtube/vimeo) ou URL do iframe (embed). Vazio = cartão de fallback; a pesquisa segue acessível |
 | `NEXT_PUBLIC_SURVEY_VIDEO_POSTER` | não | Imagem de capa do player |
 | `NEXT_PUBLIC_SURVEY_BACK_URL` | não | Destino do botão "Voltar para a Neoprop" (padrão `https://neoprop.com.br`) |
 
 Os padrões do vídeo também podem ser editados em `src/config/survey.ts`.
+
+## Planilha (onde as respostas ficam)
+
+Não há banco de dados. As respostas vão para uma planilha do Google, gravadas
+por um Web App do Apps Script que roda dentro da própria planilha.
+
+### Como ligar
+
+1. Crie a planilha no Google Sheets;
+2. **Extensões › Apps Script**, apague o conteúdo e cole
+   [`scripts/apps-script/Codigo.gs`](scripts/apps-script/Codigo.gs);
+3. No topo do script, troque `TOKEN` por um valor longo e aleatório;
+4. **Implantar › Nova implantação › App da Web**, com *Executar como* **Eu** e
+   *Quem pode acessar* **Qualquer pessoa**. Copie a URL gerada;
+5. No `.env` do site: `SHEETS_WEBHOOK_URL` = a URL, `SHEETS_TOKEN` = o mesmo
+   token do passo 3.
+
+O cabeçalho é criado sozinho na primeira gravação. A aba de destino é a
+constante `SHEET_NAME` no topo do script (hoje `Página 1`) — se o nome não
+bater com a guia da planilha, o script grava na primeira aba em vez de
+criar uma solta.
+
+> "Qualquer pessoa" libera a URL na internet — é o `SHEETS_TOKEN` que protege a
+> planilha. Trate a URL e o token como segredos, e nunca os coloque em código
+> que vá para o cliente.
+
+### Respostas incompletas
+
+Cada respondente tem **uma linha**, identificada por um `id` gerado no
+navegador. A linha é criada assim que a identificação (nome, e-mail e WhatsApp)
+é preenchida e vai sendo atualizada a cada pergunta respondida — mais uma
+última gravação quando a aba é fechada, via `sendBeacon`.
+
+Ou seja: quem para na pergunta 5 e nunca volta **fica registrado**, com o
+contato, as respostas até ali e onde parou. Duas colunas contam essa história:
+
+| Coluna | O que mostra |
+| --- | --- |
+| `status` | `parcial` enquanto não terminou, `completo` no envio final |
+| `progress` | Em que pergunta parou, ex.: `5/17` |
+| `lastStep` | Id da última pergunta alcançada, ex.: `origin` |
+
+O Apps Script nunca sobrescreve uma célula preenchida com vazio, então voltar
+depois só acrescenta — o que já estava lá não se perde. Se a pessoa retomar e
+concluir, é a **mesma linha** que vira `completo`.
+
+Uma consequência a conhecer: se alguém apagar um campo de texto que já havia
+preenchido, o valor antigo permanece na planilha.
+
+### Validação
+
+O envio final passa pela validação estrita de sempre (whitelist de todos os
+campos, ramificações e detalhes obrigatórios). Os salvamentos parciais são
+tolerantes por natureza — gravam o que existe, sem exigir o que ainda não foi
+respondido — mas continuam filtrando por whitelist, então valor inventado não
+entra na planilha.
+
+## Delay do vídeo (VTurb)
+
+Com o provider `vturb`, a seção final ("Agora queremos ouvir você" + botão
+**Começar pesquisa**) nasce com a classe `esconder` (`display: none`) e só
+aparece depois de `surveyConfig.vturb.delaySeconds` de vídeo assistido — o
+próprio player revela os elementos, com `persist: true` (quem já passou do
+delay não espera de novo ao recarregar).
+
+- Tempo do delay: `delaySeconds` em `src/config/survey.ts` (hoje **135 s**);
+- Para esconder mais coisa atrás do delay, basta adicionar a classe
+  `esconder` ao elemento;
+- `failsafeSeconds` (padrão 20 s) libera a seção se o `player.js` não carregar
+  — adblock ou CDN fora não podem trancar o acesso à pesquisa. Use `0` para
+  desativar essa rede de segurança.
 
 ## Parâmetros de URL (disparo por CRM)
 
@@ -65,23 +137,30 @@ conclusão natural da conversa. A classificação interna (detrator/neutro/promo
 
 ## Onde ver e exportar as respostas
 
-Com o `EXPORT_TOKEN` configurado:
+Abra a planilha. Não existe mais rota de export: a aba `Respostas` **é** o
+export, já legível e filtrável, e o CSV sai por *Arquivo › Fazer download*.
 
-```bash
-curl "https://pesquisa.neoprop.com.br/api/export?token=SEU_TOKEN"             # JSON com resumo de NPS
-curl -o respostas.csv "https://pesquisa.neoprop.com.br/api/export?token=SEU_TOKEN&format=csv"
+Para o NPS agregado, uma fórmula na própria planilha resolve (ajuste o intervalo
+da coluna `npsBand`):
+
+```
+=ROUND(100 * (COUNTIF(L:L;"promoter") - COUNTIF(L:L;"detractor"))
+       / COUNTIF(L:L;"<>"); 0)
 ```
 
-O JSON traz o NPS agregado (promotores − detratores) e as últimas 500 respostas;
-o CSV traz tudo, com BOM para abrir direto no Excel. Localmente também dá para
-usar `npx prisma studio`.
+Filtre por `status = completo` quando quiser só quem terminou, ou por
+`status = parcial` para ver quem abandonou e em que pergunta.
 
 ## Garantias da implementação
 
 - Envio idempotente: reenviar o mesmo formulário não duplica a resposta;
 - Sucesso só aparece após confirmação do servidor — nada de falso positivo;
-- Rascunho em `localStorage` apenas para retomar pesquisa interrompida (a
-  persistência real é sempre o banco);
+- Rascunho em `localStorage` para retomar pesquisa interrompida; a
+  persistência real é sempre a planilha;
+- Quem abandona no meio fica registrado: a linha é criada na identificação e
+  atualizada a cada pergunta, mais um `sendBeacon` ao fechar a aba;
+- Falha ao gravar um parcial é silenciosa (é só progresso) — já o envio final
+  só mostra sucesso com confirmação da planilha;
 - Validação e sanitização por whitelist no servidor, incluindo a coerência das
   ramificações com o momento da jornada;
 - Antispam sem atrito: honeypot e tempo mínimo marcam a resposta em `flagged`,
@@ -91,23 +170,12 @@ usar `npx prisma studio`.
 
 ## Deploy
 
-`Dockerfile` pronto (saída standalone do Next). Rode `npx prisma migrate deploy`
-no bootstrap ou antes de subir o container.
+`Dockerfile` pronto (saída standalone do Next). Sem banco e sem migração: basta
+as variáveis de ambiente.
 
 ## Deploy na Vercel
 
-O build já roda `prisma generate && prisma migrate deploy` — a tabela é criada
-sozinha no primeiro deploy, desde que `DATABASE_URL` esteja configurada.
-
-1. Provisione um Postgres (Neon, Supabase ou similar) e copie a **connection
-   string com pool** (serverless abre muitas conexões curtas; a URL direta
-   esgota o limite do banco).
-2. Em **Settings → Environment Variables** do projeto, configure no mínimo:
-   `DATABASE_URL` e `EXPORT_TOKEN`.
+1. Ligue a planilha seguindo os passos da seção **Planilha** acima.
+2. Em **Settings → Environment Variables** do projeto, configure no mínimo
+   `SHEETS_WEBHOOK_URL` e `SHEETS_TOKEN`.
 3. Faça o redeploy.
-
-Para rodar as migrações fora do build:
-
-```bash
-DATABASE_URL="..." npx prisma migrate deploy
-```

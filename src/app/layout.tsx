@@ -30,6 +30,8 @@ const plexMono = IBM_Plex_Mono({
 
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
+  // eixos variáveis usados no Figma (opsz 14 fecha a headline em duas linhas)
+  axes: ["opsz", "wdth"],
   variable: "--font-np-display",
   display: "swap",
 });
