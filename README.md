@@ -107,6 +107,44 @@ delay não espera de novo ao recarregar).
   — adblock ou CDN fora não podem trancar o acesso à pesquisa. Use `0` para
   desativar essa rede de segurança.
 
+## Quem já respondeu não responde de novo
+
+Ao terminar a etapa de identificação, o site pergunta à planilha se aquele
+**e-mail ou WhatsApp** já concluiu a pesquisa (`POST /api/survey/check` →
+ação `check` no Apps Script). Se já concluiu, a pessoa vê a tela "Sua resposta
+já está com a gente" em vez de refazer as 17 perguntas.
+
+Regras que importam:
+
+- **Só `status = completo` bloqueia.** Quem está em `parcial` parou no meio e
+  precisa poder continuar — barrar essa pessoa seria perder justamente a
+  resposta recuperável;
+- **Na dúvida, deixa passar.** Planilha fora do ar, timeout ou limite de
+  requisições devolvem "não encontrado": um duplicado é problema menor do que
+  barrar quem nunca respondeu;
+- **A consulta devolve só sim/não** — nunca nome, nota ou resposta de quem
+  participou. Ainda assim é um endpoint público que aceita e-mail, então tem
+  limite de 40 consultas por IP por hora para não virar ferramenta de varredura;
+- A comparação normaliza os dois lados: e-mail em minúsculas, telefone só com
+  dígitos. `(11) 91234-5678` e `11912345678` são a mesma pessoa.
+
+## Mostrar a pesquisa do início de novo
+
+Quem conclui passa a cair direto na tela final ao voltar ao site — inclusive
+no dia seguinte. É o comportamento certo para o respondente, mas atrapalha na
+hora de demonstrar a pesquisa para alguém.
+
+Para recomeçar do vídeo no mesmo navegador:
+
+```
+https://pesquisa.neoprop.com.br/?reiniciar=1
+```
+
+O parâmetro limpa o estado local e some da barra de endereços, então um F5
+depois não reinicia de novo. Não afeta a planilha: se você refizer a pesquisa
+com um e-mail que já concluiu, a checagem acima mostra a tela de "já
+respondeu" — para testar o fluxo inteiro, use um e-mail e um WhatsApp novos.
+
 ## Parâmetros de URL (disparo por CRM)
 
 Todos opcionais — a pesquisa funciona sem nenhum deles:

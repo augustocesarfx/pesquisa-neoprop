@@ -183,6 +183,7 @@ export function SurveyWizard({
   urlStage,
   prefill,
   onDone,
+  onAlreadyAnswered,
 }: {
   /** Identificação vinda do CRM/URL (cid/e-mail), quando disponível. */
   customerRef: string;
@@ -191,6 +192,8 @@ export function SurveyWizard({
   /** Dados do respondente vindos da URL (CRM) para pré-preencher. */
   prefill: { name: string; email: string; whatsapp: string };
   onDone: () => void;
+  /** Chamado quando o e-mail/WhatsApp já concluiu a pesquisa antes. */
+  onAlreadyAnswered: () => void;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -198,6 +201,7 @@ export function SurveyWizard({
     "idle"
   );
   const [honeypot, setHoneypot] = useState("");
+  const [checkingIdentity, setCheckingIdentity] = useState(false);
   const stepTopRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
 
@@ -521,12 +525,38 @@ export function SurveyWizard({
     setSubmitState("idle");
   };
 
-  const advance = () => {
+  const advance = async () => {
     const message = validate();
     if (message) {
       setError(message);
       return;
     }
+
+    // Ao sair da identificação, pergunta se essa pessoa já concluiu antes.
+    // Falha de rede aqui nunca trava o formulário: segue para a pesquisa.
+    if (step === "identity") {
+      setCheckingIdentity(true);
+      try {
+        const res = await fetch("/api/survey/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: answers.respondentEmail,
+            whatsapp: answers.respondentWhatsapp,
+          }),
+        });
+        const data = (await res.json()) as { found?: boolean };
+        if (data?.found) {
+          onAlreadyAnswered();
+          return;
+        }
+      } catch {
+        // sem resposta do servidor: deixa passar
+      } finally {
+        setCheckingIdentity(false);
+      }
+    }
+
     if (isLast) {
       void submit();
       return;
@@ -584,7 +614,7 @@ export function SurveyWizard({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          advance();
+          void advance();
         }}
         noValidate
       >
@@ -1090,7 +1120,7 @@ export function SurveyWizard({
             size="md"
             type="button"
             onClick={() => goTo(stepIndex - 1)}
-            disabled={stepIndex === 0 || submitState === "sending"}
+            disabled={stepIndex === 0 || submitState === "sending" || checkingIdentity}
             className={stepIndex === 0 ? "invisible" : ""}
           >
             Voltar
@@ -1098,7 +1128,7 @@ export function SurveyWizard({
           <Button
             type="submit"
             size="md"
-            loading={submitState === "sending"}
+            loading={submitState === "sending" || checkingIdentity}
             className="sm:min-w-44"
           >
             {isLast

@@ -57,6 +57,12 @@ function doPost(e) {
       return json({ ok: false, error: 'unauthorized' });
     }
 
+    // Ação "check": o site pergunta se este e-mail ou WhatsApp já concluiu a
+    // pesquisa. Só responde sim/não — nunca devolve dados de quem respondeu.
+    if (body.action === 'check') {
+      return json(checkConcluido(body.email, body.whatsapp));
+    }
+
     var columns = body.columns;
     var row = body.row;
     if (!columns || !columns.length || !row || !row.id) {
@@ -99,6 +105,47 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Procura um respondente que JÁ CONCLUIU a pesquisa, pelo e-mail ou pelo
+ * WhatsApp. Quem está com a linha em "parcial" não conta: essa pessoa ainda
+ * está no meio do caminho e precisa poder continuar.
+ *
+ * A comparação normaliza dos dois lados — e-mail em minúsculas e sem espaços,
+ * telefone só com dígitos — porque a planilha pode ter valores digitados em
+ * formatos diferentes ao longo do tempo.
+ */
+function checkConcluido(email, whatsapp) {
+  var mail = String(email || '').trim().toLowerCase();
+  var phone = String(whatsapp || '').replace(/\D/g, '');
+  if (!mail && !phone) return { ok: true, found: false };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  var last = sheet.getLastRow();
+  if (last < 2) return { ok: true, found: false };
+
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var iMail = header.indexOf('respondentEmail');
+  var iPhone = header.indexOf('respondentWhatsapp');
+  var iStatus = header.indexOf('status');
+  if (iMail === -1 && iPhone === -1) return { ok: true, found: false };
+
+  var values = sheet.getRange(2, 1, last - 1, header.length).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (iStatus !== -1 && String(values[i][iStatus]).trim() !== 'completo') continue;
+
+    if (mail && iMail !== -1) {
+      var rowMail = String(values[i][iMail]).trim().toLowerCase();
+      if (rowMail && rowMail === mail) return { ok: true, found: true, by: 'email' };
+    }
+    if (phone && iPhone !== -1) {
+      var rowPhone = String(values[i][iPhone]).replace(/\D/g, '');
+      if (rowPhone && rowPhone === phone) return { ok: true, found: true, by: 'whatsapp' };
+    }
+  }
+  return { ok: true, found: false };
 }
 
 /** Busca a linha do id varrendo só a coluna de ids. */

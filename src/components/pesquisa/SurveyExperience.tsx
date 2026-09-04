@@ -25,7 +25,7 @@ import { NeopropLogo } from "./NeopropLogo";
 import { SurveyVideo } from "./SurveyVideo";
 import { SurveyWizard, DONE_KEY, DRAFT_KEY } from "./SurveyWizard";
 
-type Phase = "loading" | "intro" | "survey" | "done";
+type Phase = "loading" | "intro" | "survey" | "done" | "already";
 
 export function SurveyExperience() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -71,6 +71,27 @@ export function SurveyExperience() {
       } catch {
         // idem
       }
+    }
+
+    // Reinício manual: ?reiniciar=1 limpa o estado local e começa do vídeo.
+    // Serve para demonstrar a pesquisa a outra pessoa no mesmo navegador —
+    // sem isso, quem já respondeu cairia sempre no agradecimento.
+    const restart =
+      params.get("reiniciar") === "1" || params.get("restart") === "1";
+    if (restart) {
+      try {
+        localStorage.removeItem(DONE_KEY);
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // sem storage: nada a limpar
+      }
+      // Tira o parâmetro da barra de endereços para um F5 não reiniciar de novo
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("reiniciar");
+      clean.searchParams.delete("restart");
+      window.history.replaceState({}, "", clean.toString());
+      setPhase("intro");
+      return;
     }
 
     // Já enviou → agradecimento; rascunho em andamento → retoma direto o
@@ -119,6 +140,16 @@ export function SurveyExperience() {
               customerRef={customerRef}
               urlStage={urlStage}
               prefill={prefill}
+              onAlreadyAnswered={() => {
+                try {
+                  localStorage.setItem(DONE_KEY, new Date().toISOString());
+                  localStorage.removeItem(DRAFT_KEY);
+                } catch {
+                  // sem storage, apenas mostra a tela
+                }
+                setPhase("already");
+                window.scrollTo({ top: 0, behavior: "auto" });
+              }}
               onDone={() => {
                 setPhase("done");
                 window.scrollTo({ top: 0, behavior: "auto" });
@@ -129,6 +160,8 @@ export function SurveyExperience() {
       )}
 
       {phase === "done" && <ThankYou />}
+
+      {phase === "already" && <AlreadyAnswered />}
 
       <footer className="border-t border-[var(--ap-border)] py-8">
         <Container narrow>
@@ -283,6 +316,63 @@ function Em({ children }: { children: ReactNode }) {
 }
 
 /* ------------------------------------------------------------------ */
+
+/**
+ * Quem já concluiu a pesquisa e voltou (outro aparelho, outro navegador, ou
+ * o disparo chegou duas vezes). Reconhecido pelo e-mail ou pelo WhatsApp na
+ * etapa de identificação — a pessoa não refaz as 17 perguntas.
+ */
+function AlreadyAnswered() {
+  return (
+    <section className="py-20 md:py-32" aria-label="Resposta já registrada">
+      <Container narrow className="max-w-2xl text-center">
+        <NeopropLogo className="mx-auto mb-10 h-10 w-auto" />
+        <svg viewBox="0 0 100 100" className="mx-auto size-16" aria-hidden="true">
+          <circle
+            className="np-seal-circle"
+            cx="50"
+            cy="50"
+            r="46"
+            fill="none"
+            stroke="var(--ap-border-strong)"
+            strokeWidth="1.5"
+          />
+          <path
+            className="np-seal-check"
+            d="M32 52 45 65 70 38"
+            fill="none"
+            stroke="var(--ap-green)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <h1 className="np-display mt-8 text-balance text-3xl leading-tight md:text-4xl">
+          Sua resposta já está com a gente.
+        </h1>
+        <div className="mx-auto mt-6 max-w-xl text-balance leading-relaxed text-[var(--ap-text-dim)]">
+          <p>
+            Você tirou um tempo para responder com sinceridade, e isso já está
+            guardado aqui. Obrigado por isso. O que você disse está sendo levado
+            a sério pela nossa equipe — não fica engavetado.
+          </p>
+        </div>
+        <div className="mt-12">
+          <a
+            href={surveyConfig.backUrl}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-[var(--ap-border-strong)] px-6 py-3 text-xs font-medium uppercase tracking-[0.12em] text-[var(--ap-text-dim)] transition-colors hover:border-[var(--ap-green)] hover:text-[var(--ap-text)]"
+          >
+            Voltar para a Neoprop
+          </a>
+        </div>
+        <p className="mt-8 text-xs leading-relaxed text-[var(--ap-text-dim)] opacity-70">
+          Acha que isso não deveria estar aqui? Fale com a gente pelos nossos
+          canais de sempre.
+        </p>
+      </Container>
+    </section>
+  );
+}
 
 function ThankYou() {
   return (
