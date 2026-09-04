@@ -803,13 +803,14 @@ export function SurveyWizard({
           {step === "deskMotivations" && (
             <QuestionBlock
               title="Quais foram os principais motivos que levaram você a operar por meio de uma mesa proprietária?"
-              hint="Você pode selecionar mais de uma opção."
+              hint="Escolha até três."
             >
               <MultiChoice
                 name="deskMotivations"
                 options={deskMotivations}
                 values={a.deskMotivations}
                 onChange={(v) => update({ deskMotivations: v })}
+                max={3}
               />
               {a.deskMotivations.includes("other") && (
                 <div className="mt-5">

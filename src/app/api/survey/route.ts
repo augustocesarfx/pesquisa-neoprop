@@ -189,11 +189,9 @@ export async function POST(req: NextRequest) {
   const repurchaseIntent = clean(a.repurchaseIntent, 40);
   const priorityFix = clean(a.priorityFix, 40);
 
-  const deskMotivationList = cleanArray(
-    a.deskMotivations,
-    deskMotivations,
-    deskMotivations.length
-  );
+  // Até três, igual ao limite mostrado na tela — o servidor não pode ser mais
+  // permissivo que o formulário.
+  const deskMotivationList = cleanArray(a.deskMotivations, deskMotivations, 3);
   const valuePoints = cleanArray(a.valuePoints, valueOptions(journeyStage), 2);
   const improvePoints = cleanArray(a.improvePoints, improveOptions(journeyStage), 3);
   const desiredContentList = cleanArray(a.desiredContents, desiredContents, 3);
