@@ -63,6 +63,12 @@ function doPost(e) {
       return json(checkConcluido(body.email, body.whatsapp));
     }
 
+    // Ação "list": devolve a planilha inteira para o painel de análise.
+    // Só o site chama isso, e só com o token — os dados são de clientes.
+    if (body.action === 'list') {
+      return json(listarTudo());
+    }
+
     var columns = body.columns;
     var row = body.row;
     if (!columns || !columns.length || !row || !row.id) {
@@ -146,6 +152,28 @@ function checkConcluido(email, whatsapp) {
     }
   }
   return { ok: true, found: false };
+}
+
+/** Devolve cabeçalho + todas as linhas, para o painel calcular as métricas. */
+function listarTudo() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  var last = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (last < 2 || lastCol < 1) return { ok: true, header: [], rows: [] };
+
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var values = sheet.getRange(2, 1, last - 1, lastCol).getValues();
+
+  // Datas viram texto ISO: o JSON do Apps Script serializa Date de forma
+  // inconsistente entre fusos, e o painel só precisa da string.
+  var rows = values.map(function (linha) {
+    return linha.map(function (celula) {
+      return celula instanceof Date ? celula.toISOString() : celula;
+    });
+  });
+
+  return { ok: true, header: header, rows: rows };
 }
 
 /** Busca a linha do id varrendo só a coluna de ids. */

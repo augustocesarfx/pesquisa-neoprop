@@ -93,3 +93,54 @@ export async function alreadyCompleted(
     clearTimeout(timer);
   }
 }
+
+/**
+ * Baixa a planilha inteira para o painel de análise.
+ *
+ * Devolve linhas já convertidas em objetos {coluna: valor}, usando o
+ * cabeçalho real da planilha — se alguém acrescentar uma coluna à mão, ela
+ * vem junto em vez de quebrar a leitura.
+ */
+export async function listRows(): Promise<
+  { ok: true; rows: Record<string, string>[] } | { ok: false; error: string }
+> {
+  const url = process.env.SHEETS_WEBHOOK_URL;
+  const token = process.env.SHEETS_TOKEN;
+  if (!url || !token) return { ok: false, error: "sheet_not_configured" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token, action: "list" }),
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      header?: string[];
+      rows?: unknown[][];
+    };
+    if (!data?.ok || !Array.isArray(data.header)) {
+      return { ok: false, error: "resposta_invalida" };
+    }
+    const header = data.header.map((h) => String(h));
+    const rows = (data.rows ?? []).map((linha) => {
+      const obj: Record<string, string> = {};
+      header.forEach((coluna, i) => {
+        const v = linha[i];
+        obj[coluna] = v === null || v === undefined ? "" : String(v);
+      });
+      return obj;
+    });
+    return { ok: true, rows };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "erro" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
