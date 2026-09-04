@@ -145,6 +145,40 @@ depois não reinicia de novo. Não afeta a planilha: se você refizer a pesquisa
 com um e-mail que já concluiu, a checagem acima mostra a tela de "já
 respondeu" — para testar o fluxo inteiro, use um e-mail e um WhatsApp novos.
 
+## Painel de análise (`/painel`)
+
+Lê a planilha e entrega o diagnóstico pronto, sem exportar nada. Protegido por
+senha: defina `PANEL_PASSWORD` (mínimo 8 caracteres). **Sem essa variável o
+painel fica fechado** — a tela mostra nome, e-mail, WhatsApp e a crítica de
+cada cliente, então nunca abre por esquecimento de configuração.
+
+O que ele responde, na ordem de uma decisão:
+
+1. **Retrato** — NPS (com a composição promotores/neutros/detratores), total de
+   respostas, taxa de conclusão, confiança média, tempo mediano de preenchimento;
+2. **O que os números pedem** — "Corrigir primeiro" lista os temas que os
+   **detratores** apontam; "Preservar" os que os **promotores** valorizam. São as
+   duas listas que viram plano de ação;
+3. **Por que o índice é esse** — NPS por expectativa versus entrega e por momento
+   da jornada. Segmento com NPS negativo aparece com a barra à esquerda do zero;
+4. **Onde as pessoas param** — distribuição de quem abandonou, por pergunta;
+5. **Respostas por pergunta** — percentual de cada alternativa, com a base sempre
+   declarada (é sobre quem respondeu aquela pergunta, não sobre o total — senão as
+   ramificações pareceriam irrelevantes);
+6. **O que escreveram** — todas as respostas em texto livre, com busca, detratores
+   primeiro.
+
+O NPS considera **apenas quem concluiu**. Quem parou no meio pode ter dado a nota
+e desistido depois; misturar os dois moveria o índice sem explicação.
+
+### Sobre as cores
+
+Magnitude usa uma cor só (o verde da marca) — a cor não carrega identidade, o
+rótulo ao lado de cada barra carrega. A polaridade do NPS usa par divergente
+**azul ↔ vermelho** com cinza no meio. Vermelho/verde seria o esperado e foi
+**medido e reprovado**: os dois ficam a ΔE 4,1 em deuteranopia, ou seja, um
+daltônico veria detrator e promotor da mesma cor. Azul/vermelho mede 25,7.
+
 ## Parâmetros de URL (disparo por CRM)
 
 Todos opcionais — a pesquisa funciona sem nenhum deles:
