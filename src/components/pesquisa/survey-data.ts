@@ -125,13 +125,9 @@ export const firstContactDetailLabel: Record<string, string> = {
 export const tradeMotivations: Option[] = [
   { value: "extra_income", label: "Construir uma fonte de renda complementar" },
   { value: "live_from_market", label: "Viver exclusivamente do mercado" },
-  { value: "financial_freedom", label: "Conquistar mais liberdade financeira" },
   { value: "flexibility", label: "Ter mais flexibilidade de horário e localização" },
-  { value: "change_reality", label: "Mudar minha realidade financeira e a da minha família" },
-  { value: "build_wealth", label: "Construir e aumentar meu patrimônio" },
   { value: "new_career", label: "Começar uma nova profissão ou mudar de carreira" },
   { value: "own_results", label: "Buscar uma atividade em que meu resultado dependesse mais de mim" },
-  { value: "market_interest", label: "Interesse pelo mercado financeiro e pelo desafio" },
   { value: "influence", label: "Influência de amigos, familiares ou criadores de conteúdo" },
   { value: "other", label: "Outro" },
 ];
