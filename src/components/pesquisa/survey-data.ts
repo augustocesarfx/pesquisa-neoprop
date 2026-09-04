@@ -332,15 +332,12 @@ export const NO_MARKETING = "no_marketing";
 
 export const desiredContents: Option[] = [
   { value: "account_alerts", label: "Avisos operacionais sobre minha conta" },
-  { value: "rule_changes", label: "Mudanças de regras, planos e produtos" },
-  { value: "education", label: "Conteúdo educacional objetivo" },
-  { value: "lives", label: "Lives de operação ou análise" },
+  { value: "rule_changes", label: "Conteúdo das regras e planos" },
   { value: "real_cases", label: "Cases com aprendizados reais, inclusive erros" },
   { value: "transparency", label: "Informações sobre saques e transparência da operação" },
   { value: "exceptional_offers", label: "Ofertas somente quando forem realmente excepcionais" },
   { value: "community", label: "Bastidores, comunidade e histórias de clientes" },
   { value: NO_MARKETING, label: "Prefiro não receber comunicações de marketing" },
-  { value: "other", label: "Outro" },
 ];
 
 export const REPURCHASE_FIRST_CHOICE = "first_choice";
