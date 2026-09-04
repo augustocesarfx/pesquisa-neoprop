@@ -95,13 +95,10 @@ export const journeyStages: Option[] = [
   { value: "in_evaluation", label: "Estou realizando a avaliação" },
   { value: "approved_waiting", label: "Fui aprovado e estou aguardando a conta real" },
   { value: "real_no_withdrawal", label: "Estou operando na conta real e ainda não solicitei saque" },
-  { value: "withdrawal_requested", label: "Já solicitei um saque e estou aguardando a conclusão" },
   { value: "withdrawal_received", label: "Já recebi um ou mais saques" },
   { value: "reproved_retry", label: "Fui reprovado e pretendo tentar novamente" },
   { value: "reproved_no_retry", label: "Fui reprovado e não pretendo tentar novamente" },
-  { value: "abandoned", label: "Parei ou abandonei antes de concluir" },
-  { value: "former_customer", label: "Não sou mais cliente" },
-  { value: "other", label: "Outro" },
+  { value: "abandoned", label: "Parei de operar e não pretendo mais voltar para o daytrade" },
 ];
 
 export const firstContacts: Option[] = [
@@ -110,16 +107,11 @@ export const firstContacts: Option[] = [
   { value: "google", label: "Por meio de uma pesquisa no Google" },
   { value: "referral", label: "Por indicação de um amigo ou de outro trader" },
   { value: "partner", label: "Por meio de um parceiro ou afiliado da Neoprop" },
-  { value: "creator", label: "Por meio de um professor, influenciador ou criador de conteúdo" },
-  { value: "community", label: "Em um grupo ou comunidade de traders" },
-  { value: "other", label: "Outro" },
 ];
 
 /** Rótulo do campo complementar da origem, por opção que o abre. */
 export const firstContactDetailLabel: Record<string, string> = {
   partner: "Se você se lembrar, qual parceiro apresentou a Neoprop para você?",
-  creator: "Quem apresentou a Neoprop para você?",
-  other: "Conte para a gente como você conheceu a Neoprop.",
 };
 
 export const tradeMotivations: Option[] = [
@@ -255,12 +247,11 @@ export const IMPROVE_NONE = "none";
 
 export function valueOptions(stage: string): Option[] {
   const lived = livedThemes(stage);
-  const opts = valueThemeOrder
+  // Só os temas que a pessoa viveu — sem saída neutra e sem "Outro":
+  // aqui interessa saber ONDE entregou valor, não registrar ausência.
+  return valueThemeOrder
     .filter((t) => lived.has(t))
     .map((t) => ({ value: t, label: themeLabels[t] }));
-  opts.push({ value: VALUE_NONE, label: "Não identifico um ponto de destaque" });
-  opts.push({ value: "other", label: "Outro" });
-  return opts;
 }
 
 export function improveOptions(stage: string): Option[] {
@@ -268,8 +259,9 @@ export function improveOptions(stage: string): Option[] {
   const opts = improveThemeOrder
     .filter((t) => lived.has(t))
     .map((t) => ({ value: t, label: themeLabels[t] }));
+  // Mantém a saída neutra (quem não viu problema precisa poder dizer isso),
+  // mas sem "Outro": os temas cobrem a jornada inteira.
   opts.push({ value: IMPROVE_NONE, label: "Não identifiquei um problema relevante" });
-  opts.push({ value: "other", label: "Outro" });
   return opts;
 }
 

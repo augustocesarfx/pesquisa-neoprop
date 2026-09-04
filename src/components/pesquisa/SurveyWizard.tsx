@@ -399,10 +399,7 @@ export function SurveyWizard({
       case "journey":
         return a.journeyStage ? null : "Escolha a opção que melhor descreve seu momento.";
       case "origin":
-        if (!a.firstContact) return "Escolha uma opção para continuar.";
-        if (a.firstContact === "other" && !a.firstContactDetail.trim())
-          return "Conte como você conheceu a Neoprop para continuar.";
-        return null;
+        return a.firstContact ? null : "Escolha uma opção para continuar.";
       case "otherFirms":
         if (!a.otherFirms) return "Escolha uma opção para continuar.";
         if (a.otherFirms === "yes" && !a.otherFirmsNames.trim())
@@ -422,17 +419,13 @@ export function SurveyWizard({
       case "expectation":
         return a.expectation ? null : "Escolha uma opção para continuar.";
       case "value":
-        if (a.valuePoints.length === 0)
-          return "Selecione ao menos uma opção (ou indique que não identifica um destaque).";
-        if (a.valuePoints.includes("other") && !a.valuePointsOther.trim())
-          return "Escreva qual é o outro ponto para continuar.";
-        return null;
+        return a.valuePoints.length > 0
+          ? null
+          : "Selecione ao menos uma opção para continuar.";
       case "improve":
-        if (a.improvePoints.length === 0)
-          return "Selecione ao menos uma opção (ou indique que não identificou um problema).";
-        if (a.improvePoints.includes("other") && !a.improvePointsOther.trim())
-          return "Escreva qual é o outro ponto para continuar.";
-        return null;
+        return a.improvePoints.length > 0
+          ? null
+          : "Selecione ao menos uma opção (ou indique que não identificou um problema).";
       case "improveDetail":
         return a.improveDetail.trim()
           ? null
@@ -734,14 +727,9 @@ export function SurveyWizard({
                 <div className="mt-5">
                   <OpenText
                     id="np-origin-detail"
-                    label={
-                      a.firstContact === "other"
-                        ? firstContactDetailLabel[a.firstContact]
-                        : `${firstContactDetailLabel[a.firstContact]} (Opcional)`
-                    }
+                    label={`${firstContactDetailLabel[a.firstContact]} (Opcional)`}
                     value={a.firstContactDetail}
                     onChange={(v) => update({ firstContactDetail: v })}
-                    required={a.firstContact === "other"}
                   />
                 </div>
               )}
@@ -840,27 +828,15 @@ export function SurveyWizard({
           {step === "value" && (
             <QuestionBlock
               title="Em quais pontos a Neoprop mais entregou valor para você?"
-              hint="Escolha até dois."
+              hint="Escolha até três."
             >
               <MultiChoice
                 name="value"
                 options={valueOptions(a.journeyStage)}
                 values={a.valuePoints}
                 onChange={(v) => update({ valuePoints: v })}
-                max={2}
-                exclusiveValues={[VALUE_NONE]}
+                max={3}
               />
-              {a.valuePoints.includes("other") && (
-                <div className="mt-5">
-                  <OpenText
-                    id="np-value-other"
-                    label="Qual outro ponto?"
-                    value={a.valuePointsOther}
-                    onChange={(v) => update({ valuePointsOther: v })}
-                    required
-                  />
-                </div>
-              )}
             </QuestionBlock>
           )}
 
@@ -877,17 +853,6 @@ export function SurveyWizard({
                 max={3}
                 exclusiveValues={[IMPROVE_NONE]}
               />
-              {a.improvePoints.includes("other") && (
-                <div className="mt-5">
-                  <OpenText
-                    id="np-improve-other"
-                    label="Qual outro ponto?"
-                    value={a.improvePointsOther}
-                    onChange={(v) => update({ improvePointsOther: v })}
-                    required
-                  />
-                </div>
-              )}
             </QuestionBlock>
           )}
 
